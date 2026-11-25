@@ -1,0 +1,127 @@
+name: Build Standalone Windows & Linux Executables
+
+on:
+  push:
+    branches: [main, master]
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build Windows (.exe)
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run unit tests
+        run: cargo test
+
+      - name: Build release executable
+        run: cargo build --release
+
+      - name: Prepare Windows artifact
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          Copy-Item target\release\pdf-fonts-detector.exe dist\PDF-Fonts-Detector-Windows-x64.exe
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDF-Fonts-Detector-Windows-x64
+          path: dist/PDF-Fonts-Detector-Windows-x64.exe
+
+  build-linux:
+    name: Build Linux (x86_64)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Linux build headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libxkbcommon-dev libwayland-dev libgl1-mesa-dev libx11-dev libxi-dev libxrandr-dev libxcursor-dev
+
+      - name: Setup Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+
+      - name: Run unit tests
+        run: cargo test
+
+      - name: Build release executable
+        run: cargo build --release
+
+      - name: Prepare Linux standalone binary and archive
+        run: |
+          mkdir -p dist/linux_pkg/PDF-Fonts-Detector-Linux-x86_64
+          cp target/release/pdf-fonts-detector dist/PDF-Fonts-Detector-Linux-x86_64
+          chmod +x dist/PDF-Fonts-Detector-Linux-x86_64
+
+          cp dist/PDF-Fonts-Detector-Linux-x86_64 dist/linux_pkg/PDF-Fonts-Detector-Linux-x86_64/pdf-fonts-detector
+          cat << 'EOF' > dist/linux_pkg/PDF-Fonts-Detector-Linux-x86_64/install-desktop-shortcut.sh
+          #!/usr/bin/env bash
+          set -euo pipefail
+          DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          mkdir -p "$HOME/.local/share/applications"
+          cat << DESKTOP > "$HOME/.local/share/applications/pdf-fonts-detector.desktop"
+          [Desktop Entry]
+          Type=Application
+          Name=PDF Fonts Detector
+          Comment=Détecter, télécharger et installer les polices d'un PDF
+          Exec="$DIR/pdf-fonts-detector" %F
+          Terminal=false
+          Categories=Utility;Office;
+          MimeType=application/pdf;
+          DESKTOP
+          chmod +x "$HOME/.local/share/applications/pdf-fonts-detector.desktop"
+          echo "Raccourci ajouté au menu d'applications."
+          EOF
+          chmod +x dist/linux_pkg/PDF-Fonts-Detector-Linux-x86_64/install-desktop-shortcut.sh
+
+          tar -czf dist/PDF-Fonts-Detector-Linux-x86_64.tar.gz -C dist/linux_pkg PDF-Fonts-Detector-Linux-x86_64
+          ldd dist/PDF-Fonts-Detector-Linux-x86_64 || true
+
+      - name: Upload Linux executable & archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: PDF-Fonts-Detector-Linux-x86_64
+          path: |
+            dist/PDF-Fonts-Detector-Linux-x86_64
+            dist/PDF-Fonts-Detector-Linux-x86_64.tar.gz
+
+  release:
+    name: Publish GitHub Release
+    needs: [build-windows, build-linux]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            release-assets/PDF-Fonts-Detector-Windows-x64/PDF-Fonts-Detector-Windows-x64.exe
+            release-assets/PDF-Fonts-Detector-Linux-x86_64/PDF-Fonts-Detector-Linux-x86_64
+            release-assets/PDF-Fonts-Detector-Linux-x86_64/PDF-Fonts-Detector-Linux-x86_64.tar.gz
