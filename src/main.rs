@@ -33,15 +33,25 @@ fn load_embedded_icon() -> Option<egui::IconData> {
 }
 
 fn main() -> eframe::Result<()> {
-    let initial_pdfs: Vec<PathBuf> = std::env::args_os()
-        .skip(1)
-        .map(PathBuf::from)
-        .filter(|p| {
-            p.extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"))
-        })
-        .collect();
+    let mut initial_pdfs: Vec<PathBuf> = Vec::new();
+    let mut override_lang: Option<i18n::Language> = None;
+
+    for arg in std::env::args_os().skip(1) {
+        if let Some(s) = arg.to_str() {
+            if let Some(code) = s.strip_prefix("--lang=") {
+                override_lang = i18n::Language::from_locale_tag(code);
+                continue;
+            }
+        }
+        let path = PathBuf::from(arg);
+        if path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"))
+        {
+            initial_pdfs.push(path);
+        }
+    }
 
     let mut viewport = egui::ViewportBuilder::default()
         .with_title("PDF Fonts Detector")
@@ -61,6 +71,12 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "PDF Fonts Detector",
         native_options,
-        Box::new(move |cc| Ok(Box::new(ui::PdfFontsApp::new(cc, initial_pdfs)))),
+        Box::new(move |cc| {
+            Ok(Box::new(ui::PdfFontsApp::new(
+                cc,
+                initial_pdfs,
+                override_lang,
+            )))
+        }),
     )
 }

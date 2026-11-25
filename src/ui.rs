@@ -31,6 +31,8 @@ const ACCENT_AMBER: Color32 = Color32::from_rgb(251, 191, 36);
 const ACCENT_VIOLET: Color32 = Color32::from_rgb(167, 139, 250);
 const ACCENT_VIOLET_BTN: Color32 = Color32::from_rgb(109, 40, 217);
 const ACCENT_ROSE: Color32 = Color32::from_rgb(251, 113, 133);
+const ACCENT_SPONSOR_BG: Color32 = Color32::from_rgb(190, 24, 93);
+const SPONSOR_URL: &str = "https://github.com/sponsors/furcy75";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum FilterMode {
@@ -101,14 +103,21 @@ pub struct PdfFontsApp {
 }
 
 impl PdfFontsApp {
-    pub fn new(cc: &eframe::CreationContext<'_>, initial_pdfs: Vec<PathBuf>) -> Self {
+    pub fn new(
+        cc: &eframe::CreationContext<'_>,
+        initial_pdfs: Vec<PathBuf>,
+        override_lang: Option<Language>,
+    ) -> Self {
         apply_custom_theme(&cc.egui_ctx);
 
         let settings = AppSettings::load();
-        let lang = settings
-            .language
-            .as_deref()
-            .and_then(Language::from_locale_tag)
+        let lang = override_lang
+            .or_else(|| {
+                settings
+                    .language
+                    .as_deref()
+                    .and_then(Language::from_locale_tag)
+            })
             .unwrap_or_else(Language::detect_system);
 
         let download_dir = settings.download_dir.unwrap_or_else(|| {
@@ -677,6 +686,18 @@ impl eframe::App for PdfFontsApp {
                             .size(12.5),
                     );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let sponsor_btn = egui::Button::new(
+                            RichText::new(s.btn_sponsor)
+                                .strong()
+                                .color(Color32::WHITE)
+                                .size(12.0),
+                        )
+                        .fill(ACCENT_SPONSOR_BG)
+                        .corner_radius(CornerRadius::same(6));
+                        if ui.add(sponsor_btn).on_hover_text(s.tip_sponsor).clicked() {
+                            let _ = open::that(SPONSOR_URL);
+                        }
+
                         let log_btn_text = if self.show_log { s.btn_hide_log } else { s.btn_log };
                         if ui.button(log_btn_text).clicked() {
                             self.show_log = !self.show_log;

@@ -1,6 +1,6 @@
 [package]
 name = "pdf-fonts-detector"
-version = "1.1.0"
+version = "1.2.0"
 edition = "2021"
 description = "Detect every font used in a PDF, verify installed system fonts on Windows/Linux, download or extract missing fonts, and install them in one click."
 license = "MIT"

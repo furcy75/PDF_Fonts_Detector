@@ -258,6 +258,8 @@ pub struct Strings {
     pub msg_select_for_download: &'static str,
     pub msg_batch_success: &'static str,
     pub msg_batch_partial: &'static str,
+    pub btn_sponsor: &'static str,
+    pub tip_sponsor: &'static str,
 }
 
 static EN: Strings = Strings {
@@ -347,6 +349,8 @@ static EN: Strings = Strings {
     msg_select_for_download: "Check at least one downloadable or extractable font.",
     msg_batch_success: "Success: {ok} font(s) processed.",
     msg_batch_partial: "Finished: {ok} succeeded, {err} failed (check Log).",
+    btn_sponsor: "♥ Sponsor",
+    tip_sponsor: "Support this project on GitHub Sponsors",
 };
 
 static FR: Strings = Strings {
@@ -436,6 +440,8 @@ static FR: Strings = Strings {
     msg_select_for_download: "Cochez au moins une police téléchargeable ou extractible du PDF.",
     msg_batch_success: "Opération réussie : {ok} police(s) traitée(s).",
     msg_batch_partial: "Terminé : {ok} succès, {err} échec(s) (voir le Journal).",
+    btn_sponsor: "♥ Soutenir",
+    tip_sponsor: "Soutenir ce projet sur GitHub Sponsors",
 };
 
 static ES: Strings = Strings {
@@ -525,6 +531,8 @@ static ES: Strings = Strings {
     msg_select_for_download: "Marca al menos una fuente descargable o extraíble del PDF.",
     msg_batch_success: "Operación exitosa: {ok} fuente(s) procesada(s).",
     msg_batch_partial: "Completado: {ok} éxito(s), {err} error(es) (ver Registro).",
+    btn_sponsor: "♥ Patrocinar",
+    tip_sponsor: "Apoya este proyecto en GitHub Sponsors",
 };
 
 static DE: Strings = Strings {
@@ -614,6 +622,8 @@ static DE: Strings = Strings {
     msg_select_for_download: "Markieren Sie mindestens eine herunterladbare oder extrahierbare Schriftart.",
     msg_batch_success: "Erfolg: {ok} Schrift(en) verarbeitet.",
     msg_batch_partial: "Abgeschlossen: {ok} erfolgreich, {err} fehlgeschlagen (siehe Protokoll).",
+    btn_sponsor: "♥ Sponsern",
+    tip_sponsor: "Dieses Projekt auf GitHub Sponsors unterstützen",
 };
 
 static IT: Strings = Strings {
@@ -703,6 +713,8 @@ static IT: Strings = Strings {
     msg_select_for_download: "Seleziona almeno un font scaricabile o estraibile dal PDF.",
     msg_batch_success: "Operazione riuscita: {ok} font elaborato/i.",
     msg_batch_partial: "Completato: {ok} riuscito/i, {err} errore/i (vedi Registro).",
+    btn_sponsor: "♥ Sponsorizza",
+    tip_sponsor: "Sostieni questo progetto su GitHub Sponsors",
 };
 
 static PT: Strings = Strings {
@@ -792,6 +804,8 @@ static PT: Strings = Strings {
     msg_select_for_download: "Marque pelo menos uma fonte disponível para download ou extração.",
     msg_batch_success: "Sucesso: {ok} fonte(s) processada(s).",
     msg_batch_partial: "Concluído: {ok} sucesso(s), {err} erro(s) (ver Registo).",
+    btn_sponsor: "♥ Patrocinar",
+    tip_sponsor: "Apoie este projeto no GitHub Sponsors",
 };
 
 static NL: Strings = Strings {
@@ -881,6 +895,8 @@ static NL: Strings = Strings {
     msg_select_for_download: "Vink minstens één downloadbaar of extraheerbaar lettertype aan.",
     msg_batch_success: "Geslaagd: {ok} lettertype(n) verwerkt.",
     msg_batch_partial: "Klaar: {ok} geslaagd, {err} mislukt (zie Logboek).",
+    btn_sponsor: "♥ Sponsoren",
+    tip_sponsor: "Steun dit project via GitHub Sponsors",
 };
 
 static PL: Strings = Strings {
@@ -970,6 +986,8 @@ static PL: Strings = Strings {
     msg_select_for_download: "Zaznacz co najmniej jedną czcionkę do pobrania lub wyodrębnienia.",
     msg_batch_success: "Sukces: przetworzono {ok} czcionek.",
     msg_batch_partial: "Zakończono: {ok} sukcesów, {err} błędów (zobacz Dziennik).",
+    btn_sponsor: "♥ Wesprzyj",
+    tip_sponsor: "Wesprzyj ten projekt na GitHub Sponsors",
 };
 
 static SV: Strings = Strings {
@@ -1059,6 +1077,8 @@ static SV: Strings = Strings {
     msg_select_for_download: "Markera minst ett nedladdningsbart eller extraherbart typsnitt.",
     msg_batch_success: "Klart: {ok} typsnitt bearbetade.",
     msg_batch_partial: "Klart: {ok} lyckades, {err} misslyckades (se Logg).",
+    btn_sponsor: "♥ Sponsra",
+    tip_sponsor: "Stöd detta projekt på GitHub Sponsors",
 };
 
 static DA: Strings = Strings {
@@ -1148,6 +1168,8 @@ static DA: Strings = Strings {
     msg_select_for_download: "Vælg mindst én skrifttype, der kan downloades eller udtrækkes.",
     msg_batch_success: "Succes: {ok} skrifttype(r) behandlet.",
     msg_batch_partial: "Færdig: {ok} lykkedes, {err} fejlede (se Log).",
+    btn_sponsor: "♥ Sponsorer",
+    tip_sponsor: "Støt dette projekt på GitHub Sponsors",
 };
 
 static CS: Strings = Strings {
@@ -1237,6 +1259,8 @@ static CS: Strings = Strings {
     msg_select_for_download: "Zaškrtněte alespoň jedno dostupné písmo ke stažení nebo extrakci.",
     msg_batch_success: "Úspěch: zpracováno {ok} písem.",
     msg_batch_partial: "Dokončeno: {ok} úspěšně, {err} chyb (viz Protokol).",
+    btn_sponsor: "♥ Podpořit",
+    tip_sponsor: "Podpořte tento projekt na GitHub Sponsors",
 };
 
 static RO: Strings = Strings {
@@ -1326,6 +1350,8 @@ static RO: Strings = Strings {
     msg_select_for_download: "Bifează cel puțin un font descărcabil sau disponibil din PDF.",
     msg_batch_success: "Succes: {ok} font(uri) procesate.",
     msg_batch_partial: "Finalizat: {ok} reușite, {err} eșuate (vezi Jurnal).",
+    btn_sponsor: "♥ Susține",
+    tip_sponsor: "Susține acest proiect pe GitHub Sponsors",
 };
 
 static TR: Strings = Strings {
@@ -1415,6 +1441,8 @@ static TR: Strings = Strings {
     msg_select_for_download: "İndirilebilir veya çıkarılabilir en az bir yazı tipi işaretleyin.",
     msg_batch_success: "Başarılı: {ok} yazı tipi işlendi.",
     msg_batch_partial: "Tamamlandı: {ok} başarılı, {err} başarısız (Günlüğe bakın).",
+    btn_sponsor: "♥ Destekle",
+    tip_sponsor: "Bu projeyi GitHub Sponsors üzerinden destekleyin",
 };
 
 static RU: Strings = Strings {
@@ -1504,6 +1532,8 @@ static RU: Strings = Strings {
     msg_select_for_download: "Отметьте хотя бы один шрифт для скачивания или извлечения.",
     msg_batch_success: "Успешно: обработано {ok} шрифт(ов).",
     msg_batch_partial: "Завершено: успешно {ok}, ошибок {err} (см. Журнал).",
+    btn_sponsor: "♥ Спонсор",
+    tip_sponsor: "Поддержать проект на GitHub Sponsors",
 };
 
 static UK: Strings = Strings {
@@ -1593,6 +1623,8 @@ static UK: Strings = Strings {
     msg_select_for_download: "Позначте принаймні один шрифт для завантаження або витягування.",
     msg_batch_success: "Успішно: оброблено {ok} шрифт(ів).",
     msg_batch_partial: "Завершено: успішно {ok}, помилок {err} (див. Журнал).",
+    btn_sponsor: "♥ Підтримати",
+    tip_sponsor: "Підтримайте цей проєкт на GitHub Sponsors",
 };
 
 #[cfg(test)]
