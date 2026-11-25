@@ -1,4 +1,16 @@
 <div align="center">
+  <p>
+    <strong>English</strong> ·
+    <a href="docs/README.fr.md">Français</a> ·
+    <a href="docs/README.es.md">Español</a> ·
+    <a href="docs/README.de.md">Deutsch</a> ·
+    <a href="docs/README.it.md">Italiano</a> ·
+    <a href="docs/README.pt.md">Português</a> ·
+    <a href="docs/README.nl.md">Nederlands</a> ·
+    <a href="docs/README.pl.md">Polski</a> ·
+    <a href="docs/README.ru.md">Русский</a>
+  </p>
+
   <img src="assets/app_icon.svg" alt="PDF Fonts Detector Logo" width="128" height="128" />
 
   <h1>PDF Fonts Detector</h1>
@@ -19,14 +31,19 @@
     <a href="LICENSE">
       <img src="https://img.shields.io/badge/License-MIT-10b981?style=for-the-badge" alt="MIT License" />
     </a>
+    <a href="https://github.com/sponsors/furcy75">
+      <img src="https://img.shields.io/badge/Sponsor-GitHub_Sponsors-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor on GitHub" />
+    </a>
   </p>
 
   <p>
+    <a href="#screenshots">Screenshots</a> •
     <a href="#download">Download</a> •
     <a href="#key-features">Features</a> •
     <a href="#how-it-works">How It Works</a> •
     <a href="#multilingual-support">Languages</a> •
-    <a href="#building-from-source">Build from Source</a>
+    <a href="#building-from-source">Build from Source</a> •
+    <a href="#support-the-project">Sponsor</a>
   </p>
 </div>
 
@@ -36,7 +53,19 @@
 
 **PDF Fonts Detector** is a fast, native, **100% standalone desktop application** written in Rust (`egui` / `eframe`) for **Windows** and **Linux**.
 
-Opening a PDF in a design tool, office suite, or publishing workflow often fails or breaks layout when fonts are missing on the local machine. PDF Fonts Detector eliminates the manual detective work: drop one or more PDF files onto the window, immediately see which fonts are installed vs. missing, fetch free fonts automatically from official catalogs, extract complete embedded fonts directly from the PDF when available, and install them without administrator privileges.
+Opening a PDF in a design tool, office suite, or publishing workflow often breaks typography when fonts are missing locally. PDF Fonts Detector eliminates manual font hunting: drop one or more PDF files onto the window, immediately see which fonts are installed vs. missing, download free fonts automatically from official catalogs, extract complete embedded fonts directly from the PDF when available, and install them in one click without administrator privileges.
+
+---
+
+## Screenshots
+
+<div align="center">
+  <img src="assets/screenshots/app_main_en.png" alt="PDF Fonts Detector — English Interface" width="900" />
+  <p><em>Analyzing a PDF document: instant detection of installed fonts, Google Fonts downloads, and unavailable commercial fonts.</em></p>
+  <br />
+  <img src="assets/screenshots/app_main_fr.png" alt="PDF Fonts Detector — Multilingual Interface (French)" width="900" />
+  <p><em>Live multilingual switching across 15 languages directly from the header bar.</em></p>
+</div>
 
 ---
 
@@ -46,7 +75,7 @@ Opening a PDF in a design tool, office suite, or publishing workflow often fails
 | :--- | :--- |
 | **100% Standalone Executables** | Single native binary (~7–12 MB) with instant startup. **Zero runtime dependencies**: no Python, no Qt, no Electron/WebView, no OpenSSL, and no GTK3 required. |
 | **Deep PDF Font Inspection** | Recursively parses pages, inherited `/Resources`, Type0/CID `/DescendantFonts`, and nested Form `/XObject` streams. Strips subset tags (`ABCDEF+Roboto-Bold` → `Roboto Bold`) and resolves PostScript/Microsoft aliases (`ArialMT`, `TimesNewRomanPSMT`, `Calibri,BoldItalic`). |
-| **Accurate Local PC Verification** | Reads internal OpenType/TrueType `name` tables (`ttf-parser`) across **Windows** (`C:\Windows\Fonts`, `%LOCALAPPDATA%\Microsoft\Windows\Fonts`, and Registry) and **Linux** (`fc-list`, `/usr/share/fonts`, `/usr/local/share/fonts`, `~/.local/share/fonts`). Distinguishes exact style matches from family-only matches. |
+| **Accurate Local PC Verification** | Reads internal OpenType/TrueType `name` tables (`ttf-parser`) across **Windows** (`C:\Windows\Fonts`, `%LOCALAPPDATA%\Microsoft\Windows\Fonts`, Registry) and **Linux** (`fc-list`, `/usr/share/fonts`, `/usr/local/share/fonts`, `~/.local/share/fonts`). Distinguishes exact style matches from family-only matches. |
 | **Zero-Config Free Font Downloads** | Automatically queries **Google Fonts** (official `.ttf` ZIP archives + CSS2 fallback), **Font Squirrel**, and curated **open-source mirrors** (Liberation, DejaVu, Cascadia Code/Mono). No API keys required. |
 | **Complete Embedded Font Extraction** | For fonts unavailable in free catalogs, inspects the embedded binary stream (`ttf-parser` glyph count & alphabet coverage) and enables **"Extract from PDF"** whenever a complete, non-subsetted `.ttf`/`.otf` font is embedded. |
 | **One-Click No-Admin Installation** | Installs fonts into the current user session: **Windows** (`%LOCALAPPDATA%\Microsoft\Windows\Fonts` + `HKCU` registry + live `WM_FONTCHANGE` broadcast) and **Linux** (`~/.local/share/fonts/PDF_Fonts_Detector` + `fc-cache -f`). |
@@ -80,9 +109,9 @@ Compiled on Ubuntu 22.04 (`glibc 2.35`, linking only against `libc`, `libm`, and
   ./pdf-fonts-detector
   ```
 
-> **Tip:** You can also pass PDF file paths directly on the command line (or associate the app via *"Open With"*):
+> **Tip:** You can also pass PDF file paths or a language override on the command line:
 > ```bash
-> pdf-fonts-detector document.pdf
+> pdf-fonts-detector --lang=en document.pdf
 > ```
 
 ---
@@ -114,7 +143,7 @@ flowchart LR
 
 ## Multilingual Support
 
-PDF Fonts Detector automatically detects your operating system locale and lets you switch languages live at any time from the top-right selector. Supported languages (**15**):
+PDF Fonts Detector automatically detects your operating system locale and lets you switch languages live at any time from the top-right selector. Supported UI languages (**15**):
 
 | | | | | |
 | :--- | :--- | :--- | :--- | :--- |
@@ -150,49 +179,19 @@ cargo test
 cargo build --release
 ```
 
-The compiled executable will be located at:
-- **Windows**: `target\release\pdf-fonts-detector.exe`
-- **Linux**: `target/release/pdf-fonts-detector`
-
 ---
 
-## Project Structure
+## Support the Project
 
-```text
-PDF_Fonts_Detector/
-├── .github/workflows/
-│   ├── ci.yml                 # Automated unit tests on Windows & Linux
-│   └── build.yml              # Standalone binary builds & automated GitHub Releases
-├── assets/
-│   ├── app_icon.svg           # Vector application logo
-│   ├── app_icon.png           # 256×256 PNG icon (embedded in GUI & Linux desktop entry)
-│   ├── app_icon.ico           # Multi-resolution Windows icon (embedded via build.rs)
-│   └── generate_icons.py      # Reproducible zero-dependency icon generator
-├── src/
-│   ├── main.rs                # Entrypoint, embedded window icon & CLI file handling
-│   ├── ui.rs                  # Native egui/eframe dark-slate interface & async workers
-│   ├── i18n.rs                # 15-language localization & persistent user settings
-│   ├── models.rs              # Core domain structs & status enums
-│   ├── normalizer.rs          # Subset prefix stripping, PostScript aliases & style parsing
-│   ├── pdf_analyzer.rs        # PDF resource/XObject parser, completeness check & extraction
-│   ├── system_fonts.rs        # Cross-platform installed font scanner (Windows & Linux)
-│   ├── font_catalog.rs        # Multi-source online catalog lookup (no API key required)
-│   ├── font_downloader.rs     # ZIP / tar.gz / CSS2 TTF downloader
-│   └── font_installer.rs      # User-level font installer (Windows Registry+GDI / Linux fc-cache)
-├── build.rs                   # Embeds Windows .ico & version metadata into .exe
-├── Cargo.toml
-└── LICENSE
-```
+If **PDF Fonts Detector** saves you time, please consider supporting its ongoing development and maintenance:
 
----
+<div align="center">
+  <a href="https://github.com/sponsors/furcy75">
+    <img src="https://img.shields.io/badge/♥_Sponsor_on_GitHub-ea4aaa?style=for-the-badge&logo=githubsponsors&logoColor=white" alt="Sponsor furcy75 on GitHub" />
+  </a>
+</div>
 
-## Contributing
-
-Contributions, bug reports, and new language translations are welcome!
-
-1. Fork the repository and create a feature branch (`git checkout -b feat/my-improvement`).
-2. Add or update unit tests and verify with `cargo test`.
-3. Open a Pull Request describing your changes.
+You can also support the project by starring the repository, reporting bugs, or contributing new translations and features!
 
 ---
 

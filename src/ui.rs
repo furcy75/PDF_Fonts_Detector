@@ -1465,14 +1465,21 @@ fn apply_custom_theme(ctx: &egui::Context) {
     visuals.panel_fill = BG_APP;
     visuals.extreme_bg_color = BG_LOG;
     visuals.faint_bg_color = Color32::from_rgb(23, 32, 51);
+    visuals.override_text_color = Some(TEXT_PRIMARY);
     visuals.widgets.noninteractive.bg_fill = BG_CARD;
     visuals.widgets.noninteractive.fg_stroke = Stroke::new(1.0, TEXT_PRIMARY);
     visuals.widgets.inactive.bg_fill = Color32::from_rgb(51, 65, 85);
     visuals.widgets.inactive.weak_bg_fill = Color32::from_rgb(51, 65, 85);
+    visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, TEXT_PRIMARY);
     visuals.widgets.inactive.corner_radius = CornerRadius::same(6);
     visuals.widgets.hovered.bg_fill = Color32::from_rgb(71, 85, 105);
+    visuals.widgets.hovered.weak_bg_fill = Color32::from_rgb(71, 85, 105);
+    visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, Color32::WHITE);
     visuals.widgets.hovered.corner_radius = CornerRadius::same(6);
     visuals.widgets.active.bg_fill = Color32::from_rgb(30, 41, 59);
+    visuals.widgets.active.fg_stroke = Stroke::new(1.0, Color32::WHITE);
     visuals.selection.bg_fill = Color32::from_rgb(30, 58, 95);
-    ctx.set_visuals(visuals);
+    // Appliquer sur les deux thèmes afin que le mode clair Windows n'écrase pas le thème sombre ardoise
+    ctx.set_visuals_of(egui::Theme::Dark, visuals.clone());
+    ctx.set_visuals_of(egui::Theme::Light, visuals);
 }
