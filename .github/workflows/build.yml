@@ -74,23 +74,26 @@ jobs:
           chmod +x dist/PDF-Fonts-Detector-Linux-x86_64
 
           cp dist/PDF-Fonts-Detector-Linux-x86_64 dist/linux_pkg/PDF-Fonts-Detector-Linux-x86_64/pdf-fonts-detector
+          cp assets/app_icon.png dist/linux_pkg/PDF-Fonts-Detector-Linux-x86_64/app_icon.png
           cat << 'EOF' > dist/linux_pkg/PDF-Fonts-Detector-Linux-x86_64/install-desktop-shortcut.sh
           #!/usr/bin/env bash
           set -euo pipefail
           DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-          mkdir -p "$HOME/.local/share/applications"
+          mkdir -p "$HOME/.local/share/applications" "$HOME/.local/share/icons/hicolor/256x256/apps"
+          cp "$DIR/app_icon.png" "$HOME/.local/share/icons/hicolor/256x256/apps/pdf-fonts-detector.png"
           cat << DESKTOP > "$HOME/.local/share/applications/pdf-fonts-detector.desktop"
           [Desktop Entry]
           Type=Application
           Name=PDF Fonts Detector
-          Comment=Détecter, télécharger et installer les polices d'un PDF
+          Comment=Detect, download, extract and install PDF fonts
           Exec="$DIR/pdf-fonts-detector" %F
+          Icon=pdf-fonts-detector
           Terminal=false
           Categories=Utility;Office;
           MimeType=application/pdf;
           DESKTOP
           chmod +x "$HOME/.local/share/applications/pdf-fonts-detector.desktop"
-          echo "Raccourci ajouté au menu d'applications."
+          echo "Desktop shortcut and icon installed successfully."
           EOF
           chmod +x dist/linux_pkg/PDF-Fonts-Detector-Linux-x86_64/install-desktop-shortcut.sh
 

@@ -1,9 +1,10 @@
 [package]
 name = "pdf-fonts-detector"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2021"
-description = "Détectez toutes les polices d'un PDF, vérifiez leur présence sur Windows/Linux, téléchargez-les ou extrayez-les et installez-les en un clic."
+description = "Detect every font used in a PDF, verify installed system fonts on Windows/Linux, download or extract missing fonts, and install them in one click."
 license = "MIT"
+build = "build.rs"
 
 [dependencies]
 eframe = "0.31"
@@ -21,6 +22,8 @@ open = "5"
 dirs = "5"
 regex = "1"
 urlencoding = "2"
+png = "0.17"
+sys-locale = "0.3"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"
@@ -29,6 +32,9 @@ windows-sys = { version = "0.59", features = [
     "Win32_Graphics_Gdi",
     "Win32_UI_WindowsAndMessaging",
 ] }
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
 
 [profile.release]
 opt-level = "s"

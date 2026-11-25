@@ -1,4 +1,4 @@
-//! Interface graphique native (eframe / egui) pour PDF Fonts Detector.
+//! Interface graphique native multilingue (eframe / egui) pour PDF Fonts Detector.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -10,6 +10,7 @@ use eframe::egui::{self, Color32, CornerRadius, Frame, Margin, RichText, Stroke,
 use crate::font_catalog::{build_web_search_url, FontCatalog};
 use crate::font_downloader::download_font;
 use crate::font_installer::install_font_files;
+use crate::i18n::{AppSettings, Language, Strings};
 use crate::models::{FontActionResult, InstallStatus, PdfAnalysisResult, PdfFontInfo, SourceKind};
 use crate::pdf_analyzer::{analyze_pdfs, extract_embedded_font};
 use crate::system_fonts::SystemFontIndex;
@@ -42,14 +43,14 @@ enum FilterMode {
 }
 
 impl FilterMode {
-    fn label(self) -> &'static str {
+    fn label(self, s: &'static Strings) -> &'static str {
         match self {
-            FilterMode::All => "Toutes les polices",
-            FilterMode::Missing => "Manquantes uniquement",
-            FilterMode::Downloadable => "Téléchargeables en ligne",
-            FilterMode::Extractable => "Extractibles du PDF",
-            FilterMode::NotFound => "Introuvables",
-            FilterMode::Installed => "Déjà installées",
+            FilterMode::All => s.filter_all,
+            FilterMode::Missing => s.filter_missing,
+            FilterMode::Downloadable => s.filter_downloadable,
+            FilterMode::Extractable => s.filter_extractable,
+            FilterMode::NotFound => s.filter_not_found,
+            FilterMode::Installed => s.filter_installed,
         }
     }
 }
@@ -78,6 +79,7 @@ enum WorkerEvent {
 }
 
 pub struct PdfFontsApp {
+    lang: Language,
     system_index: Option<SystemFontIndex>,
     catalog: FontCatalog,
     analysis: Option<PdfAnalysisResult>,
@@ -102,12 +104,24 @@ impl PdfFontsApp {
     pub fn new(cc: &eframe::CreationContext<'_>, initial_pdfs: Vec<PathBuf>) -> Self {
         apply_custom_theme(&cc.egui_ctx);
 
+        let settings = AppSettings::load();
+        let lang = settings
+            .language
+            .as_deref()
+            .and_then(Language::from_locale_tag)
+            .unwrap_or_else(Language::detect_system);
+
+        let download_dir = settings.download_dir.unwrap_or_else(|| {
+            dirs::download_dir()
+                .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")))
+                .join("PDF_Fonts_Detector")
+        });
+
         let (tx, rx) = mpsc::channel();
-        let download_dir = dirs::download_dir()
-            .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")))
-            .join("PDF_Fonts_Detector");
+        let s = lang.strings();
 
         let mut app = Self {
+            lang,
             system_index: None,
             catalog: FontCatalog::default(),
             analysis: None,
@@ -116,7 +130,7 @@ impl PdfFontsApp {
             filter_mode: FilterMode::All,
             busy: false,
             progress: 0.0,
-            status_text: "Prêt. Glissez un fichier PDF pour commencer.".to_string(),
+            status_text: s.status_ready.to_string(),
             show_log: false,
             logs: Vec::new(),
             banner_message: None,
@@ -135,6 +149,14 @@ impl PdfFontsApp {
         app
     }
 
+    fn save_settings(&self) {
+        let settings = AppSettings {
+            language: Some(self.lang.code().to_string()),
+            download_dir: Some(self.download_dir.clone()),
+        };
+        settings.save();
+    }
+
     fn log(&mut self, msg: impl Into<String>) {
         self.logs.push(msg.into());
         if self.logs.len() > 250 {
@@ -147,9 +169,10 @@ impl PdfFontsApp {
         if self.busy {
             return;
         }
+        let s = self.lang.strings();
         self.busy = true;
         self.progress = 0.25;
-        self.status_text = "Inventaire des polices installées sur l'ordinateur…".to_string();
+        self.status_text = s.status_scanning_pc.to_string();
 
         let tx = self.tx.clone();
         let ctx_clone = ctx.clone();
@@ -164,11 +187,14 @@ impl PdfFontsApp {
         if self.busy || paths.is_empty() {
             return;
         }
+        let s = self.lang.strings();
         self.busy = true;
         self.progress = 0.05;
         self.banner_message = None;
-        self.status_text = format!("Analyse de {} fichier(s) PDF…", paths.len());
-        self.log(format!("Analyse lancée pour {} PDF.", paths.len()));
+        self.status_text = s
+            .status_analyzing_pdfs
+            .replace("{n}", &paths.len().to_string());
+        self.log(self.status_text.clone());
 
         let existing_index = self.system_index.clone();
         let mut catalog = self.catalog.clone();
@@ -176,25 +202,23 @@ impl PdfFontsApp {
         let ctx_clone = ctx.clone();
 
         thread::spawn(move || {
-            // 1. Inventaire système si pas encore fait
             let sys_index = match existing_index {
                 Some(idx) => idx,
                 None => {
                     let _ = tx.send(WorkerEvent::Progress {
                         fraction: 0.1,
-                        message: "Inventaire des polices installées sur le PC…".to_string(),
+                        message: s.status_scanning_pc.to_string(),
                     });
                     ctx_clone.request_repaint();
                     let idx = SystemFontIndex::scan_system();
-                    let _ = tx.send(WorkerEvent::Log(format!(
-                        "{} polices système indexées.",
-                        idx.fonts.len()
-                    )));
+                    let _ = tx.send(WorkerEvent::Log(
+                        s.status_ready_count
+                            .replace("{n}", &idx.fonts.len().to_string()),
+                    ));
                     idx
                 }
             };
 
-            // 2. Analyse PDF
             let mut result = analyze_pdfs(&paths, |cur, total, msg| {
                 let frac = 0.15 + (cur as f32 / total.max(1) as f32) * 0.40;
                 let _ = tx.send(WorkerEvent::Progress {
@@ -205,13 +229,12 @@ impl PdfFontsApp {
             });
 
             for err in &result.errors {
-                let _ = tx.send(WorkerEvent::Log(format!("Avertissement : {err}")));
+                let _ = tx.send(WorkerEvent::Log(format!("[WARN] {err}")));
             }
 
-            // 3. Comparaison avec les polices du PC
             let _ = tx.send(WorkerEvent::Progress {
                 fraction: 0.60,
-                message: "Comparaison avec les polices installées sur le PC…".to_string(),
+                message: s.status_comparing_pc.to_string(),
             });
             ctx_clone.request_repaint();
 
@@ -225,19 +248,17 @@ impl PdfFontsApp {
                 }
             }
 
-            // 4. Recherche en ligne pour les polices manquantes
             if !missing_indices.is_empty() {
                 let _ = tx.send(WorkerEvent::Progress {
                     fraction: 0.68,
-                    message: "Chargement des catalogues gratuits (Google Fonts, Font Squirrel)…"
-                        .to_string(),
+                    message: s.status_loading_catalogs.to_string(),
                 });
                 ctx_clone.request_repaint();
 
                 catalog.load_if_needed();
                 if !catalog.last_network_warning.is_empty() {
                     let _ = tx.send(WorkerEvent::Log(format!(
-                        "Réseau : {}",
+                        "[NET] {}",
                         catalog.last_network_warning
                     )));
                 }
@@ -248,7 +269,7 @@ impl PdfFontsApp {
                     let family_name = result.fonts[font_idx].family.clone();
                     let _ = tx.send(WorkerEvent::Progress {
                         fraction: frac,
-                        message: format!("Recherche en ligne : {family_name}…"),
+                        message: s.status_searching_online.replace("{name}", &family_name),
                     });
                     ctx_clone.request_repaint();
 
@@ -257,7 +278,6 @@ impl PdfFontsApp {
                 }
             }
 
-            // Pré-cocher automatiquement les polices manquantes récupérables
             for font in &mut result.fonts {
                 font.selected = font.is_recoverable();
             }
@@ -292,13 +312,14 @@ impl PdfFontsApp {
             return;
         }
 
+        let s = self.lang.strings();
         self.busy = true;
         self.progress = 0.05;
         self.banner_message = None;
         self.status_text = match action {
-            BatchAction::DownloadOrExtract => "Récupération des polices en cours…".to_string(),
-            BatchAction::ExtractOnly => "Extraction depuis le PDF en cours…".to_string(),
-            BatchAction::Install => "Installation des polices sur le PC…".to_string(),
+            BatchAction::DownloadOrExtract => s.status_downloading.to_string(),
+            BatchAction::ExtractOnly => s.status_extracting.to_string(),
+            BatchAction::Install => s.status_installing.to_string(),
         };
 
         let output_dir = self.download_dir.clone();
@@ -318,7 +339,7 @@ impl PdfFontsApp {
                 let display = font.display_name();
                 let _ = tx.send(WorkerEvent::Progress {
                     fraction: frac,
-                    message: format!("Traitement : {display}…"),
+                    message: s.status_processing.replace("{name}", &display),
                 });
                 ctx_clone.request_repaint();
 
@@ -333,10 +354,7 @@ impl PdfFontsApp {
                                 return FontActionResult {
                                     font_name: f.display_name(),
                                     success: true,
-                                    message: format!(
-                                        "Déjà téléchargée dans ce lot ({} fichier(s)).",
-                                        cached.len()
-                                    ),
+                                    message: format!("Cached in batch ({} file(s)).", cached.len()),
                                     files: cached.clone(),
                                 };
                             }
@@ -353,7 +371,7 @@ impl PdfFontsApp {
                     FontActionResult {
                         font_name: f.display_name(),
                         success: false,
-                        message: "Introuvable en source libre et non extractible complètement du PDF."
+                        message: "Not available online and not completely embedded in PDF."
                             .to_string(),
                         files: Vec::new(),
                     }
@@ -365,7 +383,7 @@ impl PdfFontsApp {
                         if res.success {
                             updated_files.push((idx, res.files.clone()));
                         }
-                        let tag = if res.success { "OK" } else { "ERREUR" };
+                        let tag = if res.success { "OK" } else { "ERR" };
                         let _ = tx.send(WorkerEvent::Log(format!(
                             "[{tag}] {} : {}",
                             res.font_name, res.message
@@ -377,7 +395,7 @@ impl PdfFontsApp {
                         if res.success {
                             updated_files.push((idx, res.files.clone()));
                         }
-                        let tag = if res.success { "OK" } else { "ERREUR" };
+                        let tag = if res.success { "OK" } else { "ERR" };
                         let _ = tx.send(WorkerEvent::Log(format!(
                             "[{tag}] {} : {}",
                             res.font_name, res.message
@@ -396,7 +414,7 @@ impl PdfFontsApp {
                             let acq = acquire(&font, &mut family_cache, true);
                             if !acq.success {
                                 let _ = tx.send(WorkerEvent::Log(format!(
-                                    "[ERREUR] {} : {}",
+                                    "[ERR] {} : {}",
                                     acq.font_name, acq.message
                                 )));
                                 results.push(acq);
@@ -410,7 +428,7 @@ impl PdfFontsApp {
                         if inst.success {
                             any_installed = true;
                         }
-                        let tag = if inst.success { "OK" } else { "ERREUR" };
+                        let tag = if inst.success { "OK" } else { "ERR" };
                         let _ = tx.send(WorkerEvent::Log(format!(
                             "[{tag}] {} : {}",
                             inst.font_name, inst.message
@@ -423,7 +441,7 @@ impl PdfFontsApp {
             let new_system_index = if any_installed {
                 let _ = tx.send(WorkerEvent::Progress {
                     fraction: 0.95,
-                    message: "Actualisation des polices du PC…".to_string(),
+                    message: s.status_refreshing_pc.to_string(),
                 });
                 ctx_clone.request_repaint();
                 Some(SystemFontIndex::scan_system())
@@ -441,6 +459,7 @@ impl PdfFontsApp {
     }
 
     fn process_worker_events(&mut self) {
+        let s = self.lang.strings();
         while let Ok(ev) = self.rx.try_recv() {
             match ev {
                 WorkerEvent::Progress { fraction, message } => {
@@ -455,9 +474,8 @@ impl PdfFontsApp {
                     self.system_index = Some(idx);
                     self.busy = false;
                     self.progress = 1.0;
-                    self.status_text =
-                        format!("Prêt — {count} polices détectées sur cet ordinateur.");
-                    self.log(format!("Polices système actualisées ({count})."));
+                    self.status_text = s.status_ready_count.replace("{n}", &count.to_string());
+                    self.log(self.status_text.clone());
 
                     if let (Some(analysis), Some(sys)) =
                         (self.analysis.as_mut(), self.system_index.as_ref())
@@ -486,9 +504,10 @@ impl PdfFontsApp {
                     self.analysis = Some(result);
                     self.busy = false;
                     self.progress = 1.0;
-                    self.status_text = format!(
-                        "Analyse terminée : {font_count} police(s) détectée(s) sur {page_count} page(s)."
-                    );
+                    self.status_text = s
+                        .status_analysis_done
+                        .replace("{fonts}", &font_count.to_string())
+                        .replace("{pages}", &page_count.to_string());
                     self.banner_message = warn_text;
                     self.log(self.status_text.clone());
                 }
@@ -528,9 +547,11 @@ impl PdfFontsApp {
                     let ok_cnt = results.iter().filter(|r| r.success).count();
                     let err_cnt = results.len() - ok_cnt;
                     let summary = if err_cnt == 0 {
-                        format!("Opération réussie : {ok_cnt} police(s) traitée(s).")
+                        s.msg_batch_success.replace("{ok}", &ok_cnt.to_string())
                     } else {
-                        format!("Terminé : {ok_cnt} succès, {err_cnt} échec(s) (voir le Journal).")
+                        s.msg_batch_partial
+                            .replace("{ok}", &ok_cnt.to_string())
+                            .replace("{err}", &err_cnt.to_string())
                     };
                     self.busy = false;
                     self.progress = 1.0;
@@ -581,15 +602,34 @@ impl PdfFontsApp {
         if self.busy {
             return;
         }
+        let s = self.lang.strings();
         if let Some(files) = rfd::FileDialog::new()
-            .set_title("Sélectionner un ou plusieurs fichiers PDF")
-            .add_filter("Fichiers PDF", &["pdf"])
+            .set_title(s.dialog_pick_pdf)
+            .add_filter(s.dialog_pdf_filter, &["pdf"])
             .pick_files()
         {
             if !files.is_empty() {
                 self.start_pdf_analysis(files, ctx);
             }
         }
+    }
+
+    fn selected_recoverable_indices(&self, for_install: bool) -> Vec<usize> {
+        let Some(res) = self.analysis.as_ref() else {
+            return Vec::new();
+        };
+        res.fonts
+            .iter()
+            .enumerate()
+            .filter(|(_, f)| {
+                f.selected
+                    && (!for_install || f.install_status != InstallStatus::InstalledExact)
+                    && (!f.downloaded_files.is_empty()
+                        || f.can_download_online()
+                        || f.can_extract_from_pdf())
+            })
+            .map(|(i, _)| i)
+            .collect()
     }
 }
 
@@ -601,7 +641,9 @@ impl eframe::App for PdfFontsApp {
             self.start_pdf_analysis(initial, ctx);
         }
 
-        // Gestion du glisser-déposer de fichiers PDF sur la fenêtre
+        let s = self.lang.strings();
+
+        // Glisser-déposer natif
         let dropped_pdfs: Vec<PathBuf> = ctx.input(|i| {
             i.raw
                 .dropped_files
@@ -629,13 +671,13 @@ impl eframe::App for PdfFontsApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
-                    ui.label(RichText::new(&self.status_text).color(TEXT_PRIMARY).size(12.5));
+                    ui.label(
+                        RichText::new(&self.status_text)
+                            .color(TEXT_PRIMARY)
+                            .size(12.5),
+                    );
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        let log_btn_text = if self.show_log {
-                            "Masquer journal"
-                        } else {
-                            "Journal"
-                        };
+                        let log_btn_text = if self.show_log { s.btn_hide_log } else { s.btn_log };
                         if ui.button(log_btn_text).clicked() {
                             self.show_log = !self.show_log;
                         }
@@ -664,7 +706,7 @@ impl eframe::App for PdfFontsApp {
                                     ui.set_min_width(ui.available_width());
                                     if self.logs.is_empty() {
                                         ui.label(
-                                            RichText::new("Aucune activité enregistrée.")
+                                            RichText::new(s.log_empty)
                                                 .color(TEXT_MUTED)
                                                 .monospace()
                                                 .size(11.5),
@@ -688,7 +730,8 @@ impl eframe::App for PdfFontsApp {
         egui::CentralPanel::default()
             .frame(Frame::new().fill(BG_APP).inner_margin(Margin::same(16)))
             .show(ctx, |ui| {
-                // 1. En-tête
+                // 1. En-tête + sélecteur de langue (15 langues)
+                let mut language_changed = false;
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         ui.label(
@@ -698,33 +741,64 @@ impl eframe::App for PdfFontsApp {
                                 .color(TEXT_PRIMARY),
                         );
                         ui.label(
-                            RichText::new(
-                                "Détectez les polices d'un PDF, vérifiez leur présence sur Windows/Linux, téléchargez-les ou extrayez-les.",
-                            )
-                            .size(12.0)
-                            .color(TEXT_MUTED),
+                            RichText::new(s.app_subtitle)
+                                .size(12.0)
+                                .color(TEXT_MUTED),
                         );
                     });
 
                     ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         let open_btn = egui::Button::new(
-                            RichText::new("Ouvrir un PDF…").strong().color(Color32::WHITE),
+                            RichText::new(s.btn_open_pdf).strong().color(Color32::WHITE),
                         )
                         .fill(ACCENT_BLUE_BTN)
                         .corner_radius(CornerRadius::same(7))
-                        .min_size(Vec2::new(126.0, 32.0));
+                        .min_size(Vec2::new(118.0, 32.0));
                         if ui.add_enabled(!self.busy, open_btn).clicked() {
                             self.open_pdf_picker(ctx);
                         }
 
-                        let refresh_btn = egui::Button::new("Rafraîchir les polices du PC")
+                        let refresh_btn = egui::Button::new(s.btn_refresh_pc)
                             .corner_radius(CornerRadius::same(7))
                             .min_size(Vec2::new(0.0, 32.0));
                         if ui.add_enabled(!self.busy, refresh_btn).clicked() {
                             self.start_system_scan(ctx);
                         }
+
+                        // Sélecteur de langue
+                        let prev_lang = self.lang;
+                        egui::ComboBox::from_id_salt("language_selector")
+                            .selected_text(self.lang.native_name())
+                            .width(142.0)
+                            .show_ui(ui, |ui| {
+                                for &candidate in Language::ALL {
+                                    ui.selectable_value(
+                                        &mut self.lang,
+                                        candidate,
+                                        candidate.native_name(),
+                                    );
+                                }
+                            });
+                        if self.lang != prev_lang {
+                            language_changed = true;
+                        }
                     });
                 });
+
+                if language_changed {
+                    self.save_settings();
+                    if !self.busy {
+                        let new_s = self.lang.strings();
+                        if let Some(sys) = &self.system_index {
+                            self.status_text = new_s
+                                .status_ready_count
+                                .replace("{n}", &sys.fonts.len().to_string());
+                        } else {
+                            self.status_text = new_s.status_ready.to_string();
+                        }
+                    }
+                }
+                let s = self.lang.strings();
 
                 ui.add_space(10.0);
 
@@ -758,29 +832,34 @@ impl eframe::App for PdfFontsApp {
                                         })
                                         .collect();
                                     let extra = if res.pdf_paths.len() > 3 {
-                                        format!(" (+{} autres)", res.pdf_paths.len() - 3)
+                                        format!(
+                                            " (+{} {})",
+                                            res.pdf_paths.len() - 3,
+                                            s.drop_more_suffix
+                                        )
                                     } else {
                                         String::new()
                                     };
-                                    format!("PDF chargé(s) : {}{}", preview.join(", "), extra)
+                                    format!("{} {}{}", s.drop_loaded_prefix, preview.join(", "), extra)
                                 }
-                                None => {
-                                    "Glissez-déposez vos fichiers PDF ici (ou cliquez pour parcourir)"
-                                        .to_string()
-                                }
+                                None => s.drop_title_empty.to_string(),
                             };
-                            ui.label(RichText::new(drop_title).size(14.5).strong().color(TEXT_PRIMARY));
+                            ui.label(
+                                RichText::new(drop_title)
+                                    .size(14.5)
+                                    .strong()
+                                    .color(TEXT_PRIMARY),
+                            );
                             ui.add_space(2.0);
                             let hint = match &self.analysis {
                                 Some(res) => format!(
-                                    "{} PDF • {} page(s) • Déposez un autre PDF ou cliquez ici pour changer de fichier",
+                                    "{} PDF • {} {} • {}",
                                     res.pdf_paths.len(),
-                                    res.total_pages
+                                    res.total_pages,
+                                    s.col_pages.to_lowercase(),
+                                    s.drop_hint_loaded
                                 ),
-                                None => {
-                                    "100 % autonome • Google Fonts, Font Squirrel, miroirs libres & extraction de police complète du PDF"
-                                        .to_string()
-                                }
+                                None => s.drop_hint_empty.to_string(),
                             };
                             ui.label(RichText::new(hint).size(11.5).color(TEXT_MUTED));
                         });
@@ -834,11 +913,11 @@ impl eframe::App for PdfFontsApp {
                     };
 
                 ui.columns(5, |cols| {
-                    stat_card(&mut cols[0], "Polices détectées", total, TEXT_PRIMARY);
-                    stat_card(&mut cols[1], "Installées sur le PC", installed, ACCENT_GREEN);
-                    stat_card(&mut cols[2], "Téléchargeables", downloadable, ACCENT_BLUE);
-                    stat_card(&mut cols[3], "Extractibles du PDF", extractable, ACCENT_VIOLET);
-                    stat_card(&mut cols[4], "Introuvables", not_found, ACCENT_ROSE);
+                    stat_card(&mut cols[0], s.stat_total, total, TEXT_PRIMARY);
+                    stat_card(&mut cols[1], s.stat_installed, installed, ACCENT_GREEN);
+                    stat_card(&mut cols[2], s.stat_downloadable, downloadable, ACCENT_BLUE);
+                    stat_card(&mut cols[3], s.stat_extractable, extractable, ACCENT_VIOLET);
+                    stat_card(&mut cols[4], s.stat_not_found, not_found, ACCENT_ROSE);
                 });
 
                 // Bannière d'information / résultat
@@ -856,7 +935,7 @@ impl eframe::App for PdfFontsApp {
                                 ui.with_layout(
                                     egui::Layout::right_to_left(egui::Align::Center),
                                     |ui| {
-                                        if ui.small_button("Fermer").clicked() {
+                                        if ui.small_button(s.btn_close).clicked() {
                                             self.banner_message = None;
                                         }
                                     },
@@ -877,13 +956,13 @@ impl eframe::App for PdfFontsApp {
                         ui.horizontal(|ui| {
                             ui.add(
                                 egui::TextEdit::singleline(&mut self.search_query)
-                                    .hint_text("Rechercher une police par nom…")
+                                    .hint_text(s.search_hint)
                                     .desired_width(260.0),
                             );
 
                             egui::ComboBox::from_id_salt("filter_mode")
-                                .selected_text(self.filter_mode.label())
-                                .width(200.0)
+                                .selected_text(self.filter_mode.label(s))
+                                .width(205.0)
                                 .show_ui(ui, |ui| {
                                     for mode in [
                                         FilterMode::All,
@@ -896,7 +975,7 @@ impl eframe::App for PdfFontsApp {
                                         ui.selectable_value(
                                             &mut self.filter_mode,
                                             mode,
-                                            mode.label(),
+                                            mode.label(s),
                                         );
                                     }
                                 });
@@ -904,14 +983,14 @@ impl eframe::App for PdfFontsApp {
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
-                                    if ui.button("Tout décocher").clicked() {
+                                    if ui.button(s.btn_unselect_all).clicked() {
                                         if let Some(res) = self.analysis.as_mut() {
                                             for f in &mut res.fonts {
                                                 f.selected = false;
                                             }
                                         }
                                     }
-                                    if ui.button("Cocher les récupérables").clicked() {
+                                    if ui.button(s.btn_select_recoverable).clicked() {
                                         if let Some(res) = self.analysis.as_mut() {
                                             for f in &mut res.fonts {
                                                 f.selected = f.is_recoverable();
@@ -925,13 +1004,12 @@ impl eframe::App for PdfFontsApp {
 
                 ui.add_space(8.0);
 
-                // 5. Barre dossier de téléchargement + actions groupées (ancrée en bas du panneau central)
+                // 5. Tableau des polices
                 let mut pending_single_action: Option<(BatchAction, usize)> = None;
                 let mut pending_web_url: Option<String> = None;
 
                 let table_height = (ui.available_height() - 62.0).max(160.0);
 
-                // Tableau des polices
                 Frame::new()
                     .fill(BG_CARD)
                     .stroke(Stroke::new(1.0, BORDER_SUBTLE))
@@ -957,21 +1035,14 @@ impl eframe::App for PdfFontsApp {
                         if self.analysis.is_none() {
                             ui.centered_and_justified(|ui| {
                                 ui.label(
-                                    RichText::new(
-                                        "Aucun PDF analysé pour l'instant.\nGlissez un document PDF dans la fenêtre ou cliquez sur « Ouvrir un PDF… ».",
-                                    )
-                                    .color(TEXT_MUTED)
-                                    .size(13.5),
+                                    RichText::new(s.empty_no_pdf)
+                                        .color(TEXT_MUTED)
+                                        .size(13.5),
                                 );
                             });
                         } else if visible_indices.is_empty() {
                             ui.centered_and_justified(|ui| {
-                                ui.label(
-                                    RichText::new(
-                                        "Aucune police ne correspond au filtre actuel.",
-                                    )
-                                    .color(TEXT_MUTED),
-                                );
+                                ui.label(RichText::new(s.empty_no_match).color(TEXT_MUTED));
                             });
                         } else {
                             egui::ScrollArea::vertical()
@@ -984,26 +1055,25 @@ impl eframe::App for PdfFontsApp {
                                         .spacing([12.0, 8.0])
                                         .min_col_width(40.0)
                                         .show(ui, |ui| {
-                                            // En-têtes
-                                            ui.label(RichText::new("Sél.").strong().color(TEXT_MUTED));
-                                            ui.label(RichText::new("Police").strong().color(TEXT_MUTED));
+                                            ui.label(RichText::new(s.col_sel).strong().color(TEXT_MUTED));
+                                            ui.label(RichText::new(s.col_font).strong().color(TEXT_MUTED));
+                                            ui.label(RichText::new(s.col_type).strong().color(TEXT_MUTED));
+                                            ui.label(RichText::new(s.col_pages).strong().color(TEXT_MUTED));
                                             ui.label(
-                                                RichText::new("Type & intégration")
-                                                    .strong()
-                                                    .color(TEXT_MUTED),
-                                            );
-                                            ui.label(RichText::new("Pages").strong().color(TEXT_MUTED));
-                                            ui.label(
-                                                RichText::new("Présence PC")
+                                                RichText::new(s.col_pc_status)
                                                     .strong()
                                                     .color(TEXT_MUTED),
                                             );
                                             ui.label(
-                                                RichText::new("Source disponible")
+                                                RichText::new(s.col_source)
                                                     .strong()
                                                     .color(TEXT_MUTED),
                                             );
-                                            ui.label(RichText::new("Action").strong().color(TEXT_MUTED));
+                                            ui.label(
+                                                RichText::new(s.col_action)
+                                                    .strong()
+                                                    .color(TEXT_MUTED),
+                                            );
                                             ui.end_row();
 
                                             let busy = self.busy;
@@ -1011,24 +1081,29 @@ impl eframe::App for PdfFontsApp {
                                                 for idx in visible_indices {
                                                     let font = &mut res.fonts[idx];
 
-                                                    // 0. Case à cocher
                                                     ui.checkbox(&mut font.selected, "");
 
-                                                    // 1. Nom de la police + info-bulle détaillée
                                                     let display = font.display_name();
                                                     let mut tip = format!(
-                                                        "Nom brut PDF : {}\nFamille : {}\nStyle : {}",
-                                                        font.raw_name, font.family, font.style
+                                                        "{}: {}\n{}: {}\n{}: {}",
+                                                        s.tip_raw_name,
+                                                        font.raw_name,
+                                                        s.tip_family,
+                                                        font.family,
+                                                        s.tip_style,
+                                                        font.style
                                                     );
                                                     if let Some(sys) = &font.matched_system_font {
                                                         tip.push_str(&format!(
-                                                            "\nFichier PC : {}",
+                                                            "\n{}: {}",
+                                                            s.tip_pc_file,
                                                             sys.file_path.display()
                                                         ));
                                                     }
                                                     if !font.downloaded_files.is_empty() {
                                                         tip.push_str(&format!(
-                                                            "\nRécupérée : {} fichier(s)",
+                                                            "\n{}: {}",
+                                                            s.tip_downloaded_files,
                                                             font.downloaded_files.len()
                                                         ));
                                                     }
@@ -1039,56 +1114,60 @@ impl eframe::App for PdfFontsApp {
                                                     )
                                                     .on_hover_text(tip);
 
-                                                    // 2. Type & intégration
                                                     let embed_label = if font.is_complete_embedded {
                                                         format!(
-                                                            "{} • Complète ({} glyphes)",
-                                                            font.font_type, font.embedded_glyph_count
+                                                            "{} • {} ({} {})",
+                                                            font.font_type,
+                                                            s.embed_complete,
+                                                            font.embedded_glyph_count,
+                                                            s.embed_glyphs
                                                         )
                                                     } else if font.is_embedded {
-                                                        format!("{} • Sous-ensemble", font.font_type)
+                                                        format!("{} • {}", font.font_type, s.embed_subset)
                                                     } else {
-                                                        format!("{} • Non intégrée", font.font_type)
+                                                        format!(
+                                                            "{} • {}",
+                                                            font.font_type, s.embed_not_embedded
+                                                        )
                                                     };
                                                     ui.label(
                                                         RichText::new(embed_label).color(TEXT_MUTED),
                                                     );
 
-                                                    // 3. Pages
                                                     ui.label(font.pages_summary());
 
-                                                    // 4. Statut sur le PC
                                                     let (pc_text, pc_color) = match font.install_status {
                                                         InstallStatus::InstalledExact => {
-                                                            ("Installée", ACCENT_GREEN)
+                                                            (s.pc_installed, ACCENT_GREEN)
                                                         }
                                                         InstallStatus::InstalledFamily => {
-                                                            ("Autre style installé", ACCENT_AMBER)
+                                                            (s.pc_family_only, ACCENT_AMBER)
                                                         }
                                                         InstallStatus::Missing => {
-                                                            ("Manquante", ACCENT_ROSE)
+                                                            (s.pc_missing, ACCENT_ROSE)
                                                         }
                                                     };
-                                                    ui.label(RichText::new(pc_text).strong().color(pc_color));
+                                                    ui.label(
+                                                        RichText::new(pc_text).strong().color(pc_color),
+                                                    );
 
-                                                    // 5. Source disponible
                                                     if font.install_status
                                                         == InstallStatus::InstalledExact
                                                     {
                                                         ui.label(
-                                                            RichText::new("Déjà sur le PC")
+                                                            RichText::new(s.src_already_on_pc)
                                                                 .color(TEXT_MUTED),
                                                         );
                                                     } else if let Some(cat) = &font.catalog_match {
                                                         let src_txt = match cat.source {
                                                             SourceKind::GoogleFonts => "Google Fonts",
                                                             SourceKind::FontSquirrel => {
-                                                                "Font Squirrel (libre)"
+                                                                s.src_fontsquirrel
                                                             }
                                                             SourceKind::OpenSourceMirror => {
-                                                                "Dépôt open-source"
+                                                                s.src_open_source
                                                             }
-                                                            _ => "Catalogue libre",
+                                                            _ => s.src_free_catalog,
                                                         };
                                                         ui.label(
                                                             RichText::new(src_txt)
@@ -1096,33 +1175,32 @@ impl eframe::App for PdfFontsApp {
                                                                 .color(ACCENT_BLUE),
                                                         )
                                                         .on_hover_text(format!(
-                                                            "Famille : {}\n{}",
-                                                            cat.catalog_family, cat.details
+                                                            "{}: {}\n{}",
+                                                            s.tip_family,
+                                                            cat.catalog_family,
+                                                            cat.details
                                                         ));
                                                     } else if font.can_extract_from_pdf() {
                                                         ui.label(
-                                                            RichText::new("Extractible du PDF")
+                                                            RichText::new(s.src_extractable_pdf)
                                                                 .strong()
                                                                 .color(ACCENT_VIOLET),
                                                         )
-                                                        .on_hover_text(
-                                                            "Introuvable en source gratuite, mais la police complète est intégrée dans ce PDF.",
-                                                        );
+                                                        .on_hover_text(s.tip_extractable_pdf);
                                                     } else {
                                                         let reason = if font.is_embedded {
-                                                            "Police commerciale/personnalisée absente des catalogues gratuits (uniquement en sous-ensemble dans le PDF)."
+                                                            s.tip_not_found_subset
                                                         } else {
-                                                            "Police commerciale/personnalisée absente des catalogues gratuits et non intégrée au PDF."
+                                                            s.tip_not_found_unembedded
                                                         };
                                                         ui.label(
-                                                            RichText::new("Introuvable")
+                                                            RichText::new(s.src_not_found)
                                                                 .strong()
                                                                 .color(ACCENT_ROSE),
                                                         )
                                                         .on_hover_text(reason);
                                                     }
 
-                                                    // 6. Action rapide par ligne
                                                     if font.install_status
                                                         == InstallStatus::InstalledExact
                                                     {
@@ -1133,7 +1211,7 @@ impl eframe::App for PdfFontsApp {
                                                         );
                                                     } else if !font.downloaded_files.is_empty() {
                                                         let btn = egui::Button::new(
-                                                            RichText::new("Installer")
+                                                            RichText::new(s.btn_install)
                                                                 .color(Color32::WHITE)
                                                                 .size(12.0),
                                                         )
@@ -1145,7 +1223,7 @@ impl eframe::App for PdfFontsApp {
                                                         }
                                                     } else if font.can_download_online() {
                                                         let btn = egui::Button::new(
-                                                            RichText::new("Télécharger")
+                                                            RichText::new(s.btn_download)
                                                                 .color(Color32::WHITE)
                                                                 .size(12.0),
                                                         )
@@ -1159,7 +1237,7 @@ impl eframe::App for PdfFontsApp {
                                                         }
                                                     } else if font.can_extract_from_pdf() {
                                                         let btn = egui::Button::new(
-                                                            RichText::new("Extraire du PDF")
+                                                            RichText::new(s.btn_extract_pdf)
                                                                 .color(Color32::WHITE)
                                                                 .size(12.0),
                                                         )
@@ -1172,10 +1250,8 @@ impl eframe::App for PdfFontsApp {
                                                             ));
                                                         }
                                                     } else if ui
-                                                        .button("Rechercher…")
-                                                        .on_hover_text(
-                                                            "Ouvrir une recherche web pour cette police",
-                                                        )
+                                                        .button(s.btn_search_web)
+                                                        .on_hover_text(s.tip_web_search)
                                                         .clicked()
                                                     {
                                                         pending_web_url =
@@ -1200,27 +1276,27 @@ impl eframe::App for PdfFontsApp {
                     .inner_margin(Margin::symmetric(12, 8))
                     .show(ui, |ui| {
                         ui.horizontal(|ui| {
-                            ui.label(
-                                RichText::new("Dossier :")
-                                    .strong()
-                                    .color(TEXT_MUTED),
-                            );
+                            ui.label(RichText::new(s.label_folder).strong().color(TEXT_MUTED));
                             let mut dir_str = self.download_dir.to_string_lossy().to_string();
                             ui.add_enabled(
                                 false,
-                                egui::TextEdit::singleline(&mut dir_str).desired_width(300.0),
+                                egui::TextEdit::singleline(&mut dir_str).desired_width(290.0),
                             );
 
-                            if ui.add_enabled(!self.busy, egui::Button::new("Parcourir…")).clicked() {
+                            if ui
+                                .add_enabled(!self.busy, egui::Button::new(s.btn_browse))
+                                .clicked()
+                            {
                                 if let Some(chosen) = rfd::FileDialog::new()
-                                    .set_title("Choisir le dossier de téléchargement")
+                                    .set_title(s.dialog_pick_folder)
                                     .set_directory(&self.download_dir)
                                     .pick_folder()
                                 {
                                     self.download_dir = chosen;
+                                    self.save_settings();
                                 }
                             }
-                            if ui.button("Ouvrir").clicked() {
+                            if ui.button(s.btn_open_folder).clicked() {
                                 let _ = std::fs::create_dir_all(&self.download_dir);
                                 let _ = open::that(&self.download_dir);
                             }
@@ -1231,24 +1307,21 @@ impl eframe::App for PdfFontsApp {
                                     let has_analysis = self.analysis.is_some();
 
                                     let install_btn = egui::Button::new(
-                                        RichText::new("Installer sur le PC")
+                                        RichText::new(s.btn_install_selected)
                                             .strong()
                                             .color(Color32::WHITE),
                                     )
                                     .fill(ACCENT_GREEN_BTN)
                                     .corner_radius(CornerRadius::same(7))
-                                    .min_size(Vec2::new(146.0, 30.0));
+                                    .min_size(Vec2::new(142.0, 30.0));
                                     if ui
                                         .add_enabled(!self.busy && has_analysis, install_btn)
                                         .clicked()
                                     {
                                         let indices = self.selected_recoverable_indices(true);
                                         if indices.is_empty() {
-                                            self.banner_message = Some((
-                                                false,
-                                                "Cochez au moins une police manquante (téléchargeable ou extractible du PDF)."
-                                                    .to_string(),
-                                            ));
+                                            self.banner_message =
+                                                Some((false, s.msg_select_for_install.to_string()));
                                         } else {
                                             self.start_batch_action(
                                                 BatchAction::Install,
@@ -1259,13 +1332,13 @@ impl eframe::App for PdfFontsApp {
                                     }
 
                                     let dl_btn = egui::Button::new(
-                                        RichText::new("Télécharger la sélection")
+                                        RichText::new(s.btn_download_selected)
                                             .strong()
                                             .color(Color32::WHITE),
                                     )
                                     .fill(ACCENT_BLUE_BTN)
                                     .corner_radius(CornerRadius::same(7))
-                                    .min_size(Vec2::new(166.0, 30.0));
+                                    .min_size(Vec2::new(160.0, 30.0));
                                     if ui
                                         .add_enabled(!self.busy && has_analysis, dl_btn)
                                         .clicked()
@@ -1274,8 +1347,7 @@ impl eframe::App for PdfFontsApp {
                                         if indices.is_empty() {
                                             self.banner_message = Some((
                                                 false,
-                                                "Cochez au moins une police téléchargeable ou extractible du PDF."
-                                                    .to_string(),
+                                                s.msg_select_for_download.to_string(),
                                             ));
                                         } else {
                                             self.start_batch_action(
@@ -1290,7 +1362,6 @@ impl eframe::App for PdfFontsApp {
                         });
                     });
 
-                // Exécuter les actions déclenchées depuis une ligne du tableau
                 if let Some((act, idx)) = pending_single_action {
                     self.start_batch_action(act, vec![idx], ctx);
                 }
@@ -1298,26 +1369,6 @@ impl eframe::App for PdfFontsApp {
                     let _ = open::that(url);
                 }
             });
-    }
-}
-
-impl PdfFontsApp {
-    fn selected_recoverable_indices(&self, for_install: bool) -> Vec<usize> {
-        let Some(res) = self.analysis.as_ref() else {
-            return Vec::new();
-        };
-        res.fonts
-            .iter()
-            .enumerate()
-            .filter(|(_, f)| {
-                f.selected
-                    && (!for_install || f.install_status != InstallStatus::InstalledExact)
-                    && (!f.downloaded_files.is_empty()
-                        || f.can_download_online()
-                        || f.can_extract_from_pdf())
-            })
-            .map(|(i, _)| i)
-            .collect()
     }
 }
 
@@ -1329,7 +1380,12 @@ fn stat_card(ui: &mut egui::Ui, label: &str, value: usize, accent: Color32) {
         .inner_margin(Margin::symmetric(12, 9))
         .show(ui, |ui| {
             ui.set_min_width(ui.available_width());
-            ui.label(RichText::new(value.to_string()).size(20.0).strong().color(accent));
+            ui.label(
+                RichText::new(value.to_string())
+                    .size(20.0)
+                    .strong()
+                    .color(accent),
+            );
             ui.label(RichText::new(label).size(11.0).color(TEXT_MUTED));
         });
 }

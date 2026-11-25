@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="pdfGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e"/>
+      <stop offset="100%" stop-color="#e11d48"/>
+    </linearGradient>
+    <linearGradient id="badgeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#38bdf8"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Outer rounded app squircle -->
+  <rect x="12" y="12" width="232" height="232" rx="52" fill="url(#bgGrad)" stroke="url(#borderGrad)" stroke-width="7"/>
+
+  <!-- Document card -->
+  <path d="M56 44 H146 L186 84 V196 C186 204.8 178.8 212 170 212 H56 C47.2 212 40 204.8 40 196 V60 C40 51.2 47.2 44 56 44 Z"
+        fill="#1e293b" stroke="#64748b" stroke-width="5"/>
+  <!-- Folded corner -->
+  <path d="M146 44 V76 C146 80.4 149.6 84 154 84 H186 Z" fill="#334155"/>
+
+  <!-- PDF red pill -->
+  <rect x="54" y="62" width="78" height="30" rx="9" fill="url(#pdfGrad)"/>
+  <text x="93" y="83" font-family="Segoe UI, Inter, Arial, sans-serif" font-size="18" font-weight="800" fill="#ffffff" text-anchor="middle" letter-spacing="1.5">PDF</text>
+
+  <!-- Subtle text lines inside document -->
+  <rect x="56" y="108" width="94" height="8" rx="4" fill="#475569"/>
+  <rect x="56" y="126" width="70" height="8" rx="4" fill="#334155"/>
+  <rect x="56" y="144" width="54" height="8" rx="4" fill="#334155"/>
+
+  <!-- Typographic "Aa" glowing circle badge (bottom right) -->
+  <circle cx="176" cy="176" r="52" fill="url(#badgeGrad)" stroke="#0f172a" stroke-width="8"/>
+  <text x="176" y="193" font-family="Georgia, Times New Roman, serif" font-size="50" font-weight="700" fill="#ffffff" text-anchor="middle">Aa</text>
+</svg>

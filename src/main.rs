@@ -4,53 +4,32 @@
 mod font_catalog;
 mod font_downloader;
 mod font_installer;
+mod i18n;
 mod models;
 mod normalizer;
 mod pdf_analyzer;
 mod system_fonts;
 mod ui;
 
+use std::io::Cursor;
 use std::path::PathBuf;
 
 use eframe::egui;
 
-/// Génère une icône RGBA 64x64 propre intégrée directement dans le binaire.
-fn build_app_icon() -> egui::IconData {
-    let size: u32 = 64;
-    let mut rgba = vec![0u8; (size * size * 4) as usize];
+const APP_ICON_PNG: &[u8] = include_bytes!("../assets/app_icon.png");
 
-    for y in 0..size {
-        for x in 0..size {
-            let idx = ((y * size + x) * 4) as usize;
-            let in_box = x >= 4 && x < size - 4 && y >= 4 && y < size - 4;
-            if !in_box {
-                continue;
-            }
-            let is_border = x < 7 || x >= size - 7 || y < 7 || y >= size - 7;
-            let is_pdf_bar = x >= 14 && x <= 38 && y >= 14 && y <= 23;
-            let is_accent_block = x >= 26 && x <= 50 && y >= 32 && y <= 50;
-
-            let (r, g, b, a) = if is_border {
-                (56, 189, 248, 255)
-            } else if is_pdf_bar {
-                (225, 29, 72, 255)
-            } else if is_accent_block {
-                (56, 189, 248, 255)
-            } else {
-                (15, 23, 42, 255)
-            };
-            rgba[idx] = r;
-            rgba[idx + 1] = g;
-            rgba[idx + 2] = b;
-            rgba[idx + 3] = a;
-        }
-    }
-
-    egui::IconData {
+/// Décode l'icône PNG 256x256 embarquée dans le binaire pour la fenêtre native (Windows & Linux).
+fn load_embedded_icon() -> Option<egui::IconData> {
+    let decoder = png::Decoder::new(Cursor::new(APP_ICON_PNG));
+    let mut reader = decoder.read_info().ok()?;
+    let mut buf = vec![0u8; reader.output_buffer_size()];
+    let info = reader.next_frame(&mut buf).ok()?;
+    let rgba = buf[..info.buffer_size()].to_vec();
+    Some(egui::IconData {
         rgba,
-        width: size,
-        height: size,
-    }
+        width: info.width,
+        height: info.height,
+    })
 }
 
 fn main() -> eframe::Result<()> {
@@ -64,13 +43,18 @@ fn main() -> eframe::Result<()> {
         })
         .collect();
 
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_title("PDF Fonts Detector")
+        .with_inner_size([1200.0, 760.0])
+        .with_min_inner_size([940.0, 600.0])
+        .with_drag_and_drop(true);
+
+    if let Some(icon) = load_embedded_icon() {
+        viewport = viewport.with_icon(icon);
+    }
+
     let native_options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("PDF Fonts Detector")
-            .with_inner_size([1180.0, 760.0])
-            .with_min_inner_size([920.0, 600.0])
-            .with_drag_and_drop(true)
-            .with_icon(build_app_icon()),
+        viewport,
         ..Default::default()
     };
 
