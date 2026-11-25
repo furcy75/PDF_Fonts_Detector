@@ -100,6 +100,9 @@ pub struct PdfFontsApp {
     rx: Receiver<WorkerEvent>,
     tx: Sender<WorkerEvent>,
     pending_initial_pdfs: Option<Vec<PathBuf>>,
+    screenshot_out: Option<PathBuf>,
+    screenshot_wait_frames: u8,
+    screenshot_requested: bool,
 }
 
 impl PdfFontsApp {
@@ -107,6 +110,7 @@ impl PdfFontsApp {
         cc: &eframe::CreationContext<'_>,
         initial_pdfs: Vec<PathBuf>,
         override_lang: Option<Language>,
+        screenshot_out: Option<PathBuf>,
     ) -> Self {
         apply_custom_theme(&cc.egui_ctx);
 
@@ -150,6 +154,9 @@ impl PdfFontsApp {
             } else {
                 Some(initial_pdfs)
             },
+            screenshot_out,
+            screenshot_wait_frames: 0,
+            screenshot_requested: false,
         };
 
         if app.pending_initial_pdfs.is_none() {
@@ -648,6 +655,33 @@ impl eframe::App for PdfFontsApp {
 
         if let Some(initial) = self.pending_initial_pdfs.take() {
             self.start_pdf_analysis(initial, ctx);
+        }
+
+        // Mode capture d'écran CLI (--screenshot=chemin.png)
+        if let Some(out_path) = self.screenshot_out.clone() {
+            let captured = ctx.input(|i| {
+                i.raw.events.iter().find_map(|ev| {
+                    if let egui::Event::Screenshot { image, .. } = ev {
+                        Some(image.clone())
+                    } else {
+                        None
+                    }
+                })
+            });
+            if let Some(img) = captured {
+                let _ = save_color_image_png(&img, &out_path);
+                self.screenshot_out = None;
+                ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+            } else if !self.busy && !self.screenshot_requested {
+                self.screenshot_wait_frames = self.screenshot_wait_frames.saturating_add(1);
+                ctx.request_repaint();
+                if self.screenshot_wait_frames >= 4 {
+                    self.screenshot_requested = true;
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Screenshot(
+                        egui::UserData::default(),
+                    ));
+                }
+            }
         }
 
         let s = self.lang.strings();
@@ -1391,6 +1425,20 @@ impl eframe::App for PdfFontsApp {
                 }
             });
     }
+}
+
+fn save_color_image_png(image: &egui::ColorImage, path: &PathBuf) -> Result<(), String> {
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let file = std::fs::File::create(path).map_err(|e| e.to_string())?;
+    let w = std::io::BufWriter::new(file);
+    let mut encoder = png::Encoder::new(w, image.size[0] as u32, image.size[1] as u32);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    let mut writer = encoder.write_header().map_err(|e| e.to_string())?;
+    let rgba: Vec<u8> = image.pixels.iter().flat_map(|c| c.to_array()).collect();
+    writer.write_image_data(&rgba).map_err(|e| e.to_string())
 }
 
 fn stat_card(ui: &mut egui::Ui, label: &str, value: usize, accent: Color32) {

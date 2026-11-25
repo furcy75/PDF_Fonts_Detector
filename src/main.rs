@@ -35,11 +35,16 @@ fn load_embedded_icon() -> Option<egui::IconData> {
 fn main() -> eframe::Result<()> {
     let mut initial_pdfs: Vec<PathBuf> = Vec::new();
     let mut override_lang: Option<i18n::Language> = None;
+    let mut screenshot_out: Option<PathBuf> = None;
 
     for arg in std::env::args_os().skip(1) {
         if let Some(s) = arg.to_str() {
             if let Some(code) = s.strip_prefix("--lang=") {
                 override_lang = i18n::Language::from_locale_tag(code);
+                continue;
+            }
+            if let Some(path) = s.strip_prefix("--screenshot=") {
+                screenshot_out = Some(PathBuf::from(path));
                 continue;
             }
         }
@@ -76,6 +81,7 @@ fn main() -> eframe::Result<()> {
                 cc,
                 initial_pdfs,
                 override_lang,
+                screenshot_out,
             )))
         }),
     )
